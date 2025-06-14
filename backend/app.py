@@ -267,6 +267,74 @@ def update_profile():
     update_user_profile(user_id, {"key": key, "value": value})
     return jsonify({"status": "updated", "key": key})
 
+@app.route('/user/profile', methods=['POST'])
+def get_profile():
+    """Get user profile by ID"""
+    user_id = request.json.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    profile = get_user_profile(user_id)
+    if profile:
+        return jsonify({"profile": profile})
+    return jsonify({"error": "User not found"}), 404
+
+
+@app.route('/user/profile/update', methods=['POST'])
+def update_profile():
+    """Update specific field in user profile"""
+    data = request.json
+    user_id = data.get('user_id')
+    key = data.get('key')
+    value = data.get('value')
+
+    if not all([user_id, key, value]):
+        return jsonify({"error": "Missing user_id, key, or value"}), 400
+
+    try:
+        update_user_profile(user_id, {"key": key, "value": value})
+        return jsonify({
+            "status": "success",
+            "message": f"{key} updated",
+            "key": key,
+            "value": value
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/user/profile/delete', methods=['POST'])
+def delete_profile_key():
+    """Remove a key from user profile"""
+    data = request.json
+    user_id = data.get('user_id')
+    key = data.get('key')
+
+    if not user_id or not key:
+        return jsonify({"error": "Missing user_id or key"}), 400
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        cur.execute("""
+            UPDATE users
+            SET profile = profile #- %s::TEXT[]
+            WHERE id = %s
+        """, ('{' + key + '}', user_id))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "status": "deleted",
+            "key": key
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
