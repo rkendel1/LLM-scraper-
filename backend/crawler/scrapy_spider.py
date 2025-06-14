@@ -40,3 +40,22 @@ def run_crawler(domain, depth):
     except Exception as e:
         print("No output file found:", e)
         return []
+
+def parse(self, response):
+    yield {
+        'url': response.url,
+        'html': response.text,
+        'pdf_links': []
+    }
+
+    # Extract all links
+    le = LinkExtractor()
+    for link in le.extract_links(response):
+        if link.url.lower().endswith('.pdf'):
+            yield {
+                'url': response.url,
+                'html': response.text,
+                'pdf_links': [link.url]
+            }
+        else:
+            yield scrapy.Request(link.url, callback=self.parse)
