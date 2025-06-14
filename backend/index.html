@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend API Testing Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+```
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        overflow: hidden;
+    }
+
+    .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+
+    .header p {
+        font-size: 1.1rem;
+        opacity: 0.9;
+    }
+
+    .config-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .config-section h3 {
+        margin-bottom: 15px;
+        color: #495057;
+    }
+
+    .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 15px;
+    }
+
+    .input-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .input-group label {
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .input-group input {
+        padding: 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+    }
+
+    .input-group input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .main-content {
+        padding: 30px;
+    }
+
+    .endpoint-section {
+        margin-bottom: 40px;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        overflow: hidden;
+        background: white;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .endpoint-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.3s;
+    }
+
+    .endpoint-header:hover {
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    }
+
+    .endpoint-header h3 {
+        font-size: 1.3rem;
+        margin-bottom: 5px;
+    }
+
+    .endpoint-header p {
+        opacity: 0.9;
+        font-size: 0.95rem;
+    }
+
+    .endpoint-content {
+        padding: 25px;
+        display: none;
+    }
+
+    .endpoint-content.active {
+        display: block;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .form-group textarea {
+        min-height: 120px;
+        resize: vertical;
+        font-family: 'Courier New', monospace;
+    }
+
+    .btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin-right: 10px;
+        margin-bottom: 10px;
+    }
+
+    .btn:hover {
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn:active {
+        transform: translateY(0);
+    }
+
+    .btn-clear {
+        background: #6c757d;
+    }
+
+    .btn-clear:hover {
+        background: #5a6268;
+    }
+
+    .response-section {
+        margin-top: 25px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+    }
+
+    .response-section h4 {
+        margin-bottom: 15px;
+        color: #495057;
+    }
+
+    .response-content {
+        background: #fff;
+        padding: 15px;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        white-space: pre-wrap;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 10px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+
+    .status-success {
+        background-color: #28a745;
+    }
+
+    .status-error {
+        background-color: #dc3545;
+    }
+
+    .status-pending {
+        background-color: #ffc107;
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+    }
+
+    .key-pair-row {
+        margin-bottom: 15px;
+        padding: 15px;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        background: #f8f9fa;
+        transition: all 0.3s;
+    }
+
+    .key-pair-row.delete-mode {
+        border-left: 4px solid #dc3545;
+    }
+
+    .key-pair-row.delete-mode.selected {
+        background: #f8d7da;
+        border-color: #dc3545;
+    }
+
+    .delete-checkbox {
+        margin-right: 10px;
+    }
+
+    .bulk-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 15px 0;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width: 768px) {
+        .grid-2,
+        .grid-3 {
+            grid-template-columns: 1fr;
+        }
+        
+        .config-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .bulk-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .bulk-actions button {
+            margin: 5px 0;
+        }
+    }
+</style>
+```
+
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Backend API Testing Interface</h1>
+            <p>Comprehensive testing tool for your Flask backend endpoints</p>
+        </div>
+
+```
+    <div class="config-section">
+        <h3>⚙️ Configuration</h3>
+        <div class="config-grid">
+            <div class="input-group">
+                <label for="baseUrl">Base URL:</label>
+                <input type="text" id="baseUrl" value="http://localhost:5000" placeholder="http://localhost:5000">
+            </div>
+            <div class="input-group">
+                <label for="defaultUserId">Default User ID:</label>
+                <input type="text" id="defaultUserId" value="123" placeholder="123">
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Web Crawling Section -->
+        <div class="endpoint-section">
+            <div class="endpoint-header" onclick="toggleSection('crawl')">
+                <h3>🕷️ Web Crawling</h3>
+                <p>Start web crawling and content extraction</p>
+            </div>
+            <div class="endpoint-content" id="crawl-content">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label for="crawl-domain">Domain:</label>
+                        <input type="text" id="crawl-domain" placeholder="example.com" value="example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="crawl-depth">Depth:</label>
+                        <input type="number" id="crawl-depth" value="2" min="1" max="5">
+                    </div>
+                </div>
+                <button class="btn" onclick="startCrawl()">Start Crawl</button>
+                <button class="btn btn-clear" onclick="clearResponse('crawl')">Clear Response</button>
+                <div class="response-section" id="crawl-response" style="display: none;">
+                    <h4>Response:</h4>
+                    <div class="response-content" id="crawl-response-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAG Question Answering Section -->
+        <div class="endpoint-section">
+            <div class="endpoint-header" onclick="toggleSection('rag')">
+                <h3>🤖 RAG Question Answering</h3>
+                <p>Ask questions using Retrieval-Augmented Generation</p>
+            </div>
+            <div class="endpoint-content" id="rag-content">
+                <div class="form-group">
+                    <label for="rag-question">Question:</label>
+                    <textarea id="rag-question" placeholder="What is the main topic of the crawled content?">What is the main topic of the crawled content?</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="rag-user-id">User ID (optional):</label>
+                    <input type="text" id="rag-user-id" placeholder="Leave empty for anonymous">
+                </div>
+                <button class="btn" onclick="askQuestion()">Ask Question</button>
+                <button class="btn btn-clear" onclick="clearResponse('rag')">Clear Response</button>
+                <div class="response-section" id="rag-response" style="display: none;">
+                    <h4>Response:</h4>
+                    <div class="response-content" id="rag-response-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Authentication Section -->
+        <div class="endpoint-section">
+            <div class="endpoint-header" onclick="toggleSection('auth')">
+                <h3>🔐 User Authentication</h3>
+                <p>Register, verify email, and request mail OTP</p>
+            </div>
+            <div class="endpoint-content" id="auth-content">
+                <div class="grid-3">
+                    <div>
+                        <h4>Register User</h4>
+                        <div class="form-group">
+                            <label for="auth-email">Email:</label>
+                            <input type="email" id="auth-email" placeholder="user@example.com" value="test@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="auth-password">Password:</label>
+                            <input type="password" id="auth-password" placeholder="password" value="testpass123">
+                        </div>
+                        <button class="btn" onclick="registerUser()">Register</button>
+                    </div>
+                    <div>
+                        <h4>Verify Email</h4>
+                        <div class="form-group">
+                            <label for="verify-email">Email:</label>
+                            <input type="email" id="verify-email" placeholder="user@example.com" value="test@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="verify-otp">OTP:</label>
+                            <input type="text" id="verify-otp" placeholder="123456" value="123456">
+                        </div>
+                        <button class="btn" onclick="verifyEmail()">Verify</button>
+                    </div>
+                    <div>
+                        <h4>Request Mail OTP</h4>
+                        <div class="form-group">
+                            <label for="mail-user-id">User ID:</label>
+                            <input type="text" id="mail-user-id" placeholder="123" value="123">
+                        </div>
+                        <button class="btn" onclick="requestMailOTP()">Request Mail OTP</button>
+                    </div>
+                </div>
+                <div class="response-section" id="auth-response" style="display: none;">
+                    <h4>Response:</h4>
+                    <div class="response-content" id="auth-response-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Profile Management Section -->
+        <div class="endpoint-section">
+            <div class="endpoint-header" onclick="toggleSection('profile')">
+                <h3>👤 User Profile Management</h3>
+                <p>Get, update, and delete user profile information</p>
+            </div>
+            <div class="endpoint-content" id="profile-content">
+                <div class="grid-2">
+                    <div>
+                        <h4>Get Profile</h4>
+                        <div class="form-group">
+                            <label for="get-profile-user-id">User ID:</label>
+                            <input type="text" id="get-profile-user-id" placeholder="123" value="123">
+                        </div>
+                        <button class="btn" onclick="getProfile()">Get Profile</button>
+                    </div>
+                    <div>
+                        <h4>Single Key Operations</h4>
+                        <div class="form-group">
+                            <label for="single-profile-user-id">User ID:</label>
+                            <input type="text" id="single-profile-user-id" placeholder="123" value="123">
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label for="single-profile-key">Key:</label>
+                                <input type="text" id="single-profile-key" placeholder="name" value="name">
+                            </div>
+                            <div class="form-group">
+                                <label for="single-profile-value">Value:</label>
+                                <input type="text" id="single-profile-value" placeholder="John Doe" value="John Doe">
+                            </div>
+                        </div>
+                        <button class="btn" onclick="updateSingleKey()">Update Key</button>
+                        <button class="btn" onclick="deleteSingleKey()" style="background: #dc3545;">Delete Key</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h4>Bulk Profile Management</h4>
+                    <div class="form-group">
+                        <label for="bulk-profile-user-id">User ID:</label>
+                        <input type="text" id="bulk-profile-user-id" placeholder="123" value="123">
+                    </div>
+                    
+                    <div id="key-pairs-container">
+                        <div class="key-pair-row" data-index="0">
+                            <div class="grid-3" style="align-items: end;">
+                                <div class="form-group">
+                                    <label>Key:</label>
+                                    <input type="text" class="key-input" placeholder="e.g., name" value="name">
+                                </div>
+                                <div class="form-group">
+                                    <label>Value:</label>
+                                    <input type="text" class="value-input" placeholder="e.g., John Doe" value="John Doe">
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn" onclick="removeKeyPair(0)" style="background: #dc3545; padding: 8px 12px;">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="key-pair-row" data-index="1">
+                            <div class="grid-3" style="align-items: end;">
+                                <div class="form-group">
+                                    <label>Key:</label>
+                                    <input type="text" class="key-input" placeholder="e.g., email" value="email">
+                                </div>
+                                <div class="form-group">
+                                    <label>Value:</label>
+                                    <input type="text" class="value-input" placeholder="e.g., john@example.com" value="john@example.com">
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn" onclick="removeKeyPair(1)" style="background: #dc3545; padding: 8px 12px;">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="key-pair-row" data-index="2">
+                            <div class="grid-3" style="align-items: end;">
+                                <div class="form-group">
+                                    <label>Key:</label>
+                                    <input type="text" class="key-input" placeholder="e.g., age" value="age">
+                                </div>
+                                <div class="form-group">
+                                    <label>Value:</label>
+                                    <input type="text" class="value-input" placeholder="e.g., 30" value="30">
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn" onclick="removeKeyPair(2)" style="background: #dc3545; padding: 8px 12px;">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <button class="btn" onclick="addKeyPair()" style="background: #28a745;">+ Add Key Pair</button>
+                        <button class="btn" onclick="updateMultipleKeys()">Update All Keys</button>
+                        <button class="btn" onclick="deleteMultipleKeys()" style="background: #dc3545;">Delete Selected Keys</button>
+                        <button class="btn btn-clear" onclick="clearAllKeyPairs()">Clear All</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="delete-mode-checkbox" onchange="toggleDeleteMode()">
+                            Delete Mode (check keys to delete)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="response-section" id="profile-response" style="display: none;">
+                    <h4>Response:</h4>
+                    <div class="response-content" id="profile-response-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global variables
+    let baseUrl = 'http://localhost:5000';
+    let defaultUserId = '123';
+    let keyPairIndex = 3; // Start from 3 since we have 3 initial pairs
+    let deleteMode = false;
+
+    // Update configuration
+    document.getElementById('baseUrl').addEventListener('change', function() {
+        baseUrl = this.value;
+    });
+
+    document.getElementById('defaultUserId').addEventListener('change', function() {
+        defaultUserId = this.value;
+        // Update all user ID fields with the new default
+        document.getElementById('rag-user-id').placeholder = defaultUserId;
+        document.getElementById('mail-user-id').value = defaultUserId;
+        document.getElementById('get-profile-user-id').value = defaultUserId;
+        document.getElementById('single-profile-user-id').value = defaultUserId;
+        document.getElementById('bulk-profile-user-id').value = defaultUserId;
+    });
+
+    // Toggle section visibility
+    function toggleSection(sectionId) {
+        const content = document.getElementById(sectionId + '-content');
+        content.classList.toggle('active');
+    }
+
+    // Clear response
+    function clearResponse(sectionId) {
+        const responseDiv = document.getElementById(sectionId + '-response');
+        const responseContent = document.getElementById(sectionId + '-response-content');
+        responseDiv.style.display = 'none';
+        responseContent.textContent = '';
+    }
+
+    // Show response
+    function showResponse(sectionId, data, isError = false) {
+        const responseDiv = document.getElementById(sectionId + '-response');
+        const responseContent = document.getElementById(sectionId + '-response-content');
+        
+        responseDiv.style.display = 'block';
+        responseContent.textContent = JSON.stringify(data, null, 2);
+        
+        if (isError) {
+            responseContent.style.color = '#dc3545';
+            responseContent.style.borderLeft = '4px solid #dc3545';
+        } else {
+            responseContent.style.color = '#28a745';
+            responseContent.style.borderLeft = '4px solid #28a745';
+        }
+    }
+
+    // Show loading state
+    function showLoading(buttonElement) {
+        const originalText = buttonElement.textContent;
+        buttonElement.innerHTML = '<span class="loading"></span>' + originalText;
+        buttonElement.disabled = true;
+        return originalText;
+    }
+
+    // Hide loading state
+    function hideLoading(buttonElement, originalText) {
+        buttonElement.textContent = originalText;
+        buttonElement.disabled = false;
+    }
+
+    // Generic API call function
+    async function makeApiCall(endpoint, method = 'POST', data = null) {
+        try {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(baseUrl + endpoint, options);
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${result.error || 'Unknown error'}`);
+            }
+
+            return result;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Web Crawling Functions
+    async function startCrawl() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const domain = document.getElementById('crawl-domain').value;
+            const depth = parseInt(document.getElementById('crawl-depth').value);
+
+            if (!domain) {
+                throw new Error('Domain is required');
+            }
+
+            const result = await makeApiCall('/start-crawl', 'POST', {
+                domain: domain,
+                depth: depth
+            });
+
+            showResponse('crawl', result);
+        } catch (error) {
+            showResponse('crawl', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    // RAG Question Answering Functions
+    async function askQuestion() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const question = document.getElementById('rag-question').value;
+            const userId = document.getElementById('rag-user-id').value;
+
+            if (!question) {
+                throw new Error('Question is required');
+            }
+
+            const requestData = { question: question };
+            if (userId) {
+                requestData.user_id = userId;
+            }
+
+            const result = await makeApiCall('/rag/ask', 'POST', requestData);
+            showResponse('rag', result);
+        } catch (error) {
+            showResponse('rag', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    // Authentication Functions
+    async function registerUser() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+
+            if (!email || !password) {
+                throw new Error('Email and password are required');
+            }
+
+            const result = await makeApiCall('/auth/register', 'POST', {
+                email: email,
+                password: password
+            });
+
+            showResponse('auth', result);
+        } catch (error) {
+            showResponse('auth', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    async function verifyEmail() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const email = document.getElementById('verify-email').value;
+            const otp = document.getElementById('verify-otp').value;
+
+            if (!email || !otp) {
+                throw new Error('Email and OTP are required');
+            }
+
+            const result = await makeApiCall('/auth/verify-email', 'POST', {
+                email: email,
+                otp: otp
+            });
+
+            showResponse('auth', result);
+        } catch (error) {
+            showResponse('auth', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    async function requestMailOTP() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const userId = document.getElementById('mail-user-id').value;
+
+            if (!userId) {
+                throw new Error('User ID is required');
+            }
+
+            const result = await makeApiCall('/auth/request-mail-otp', 'POST', {
+                user_id: userId
+            });
+
+            showResponse('auth', result);
+        } catch (error) {
+            showResponse('auth', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    // Profile Management Functions
+    async function getProfile() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const userId = document.getElementById('get-profile-user-id').value;
+
+            if (!userId) {
+                throw new Error('User ID is required');
+            }
+
+            const result = await makeApiCall('/user/profile', 'POST', {
+                user_id: userId
+            });
+
+            showResponse('profile', result);
+        } catch (error) {
+            showResponse('profile', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    async function updateSingleKey() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const userId = document.getElementById('single-profile-user-id').value;
+            const key = document.getElementById('single-profile-key').value;
+            const value = document.getElementById('single-profile-value').value;
+
+            if (!userId || !key || !value) {
+                throw new Error('User ID, key, and value are required');
+            }
+
+            const result = await makeApiCall('/user/profile/update', 'POST', {
+                user_id: userId,
+                key: key,
+                value: value
+            });
+
+            showResponse('profile', result);
+        } catch (error) {
+            showResponse('profile', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    async function deleteSingleKey() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const userId = document.getElementById('single-profile-user-id').value;
+            const key = document.getElementById('single-profile-key').value;
+
+            if (!userId || !key) {
+                throw new Error('User ID and key are required');
+            }
+
+            const result = await makeApiCall('/user/profile/delete', 'POST', {
+                user_id: userId,
+                key: key
+            });
+
+            showResponse('profile', result);
+        } catch (error) {
+            showResponse('profile', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    // Bulk Profile Management Functions
+    function addKeyPair() {
+        const container = document.getElementById('key-pairs-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'key-pair-row';
+        newRow.setAttribute('data-index', keyPairIndex);
+        
+        newRow.innerHTML = `
+            <div class="grid-3" style="align-items: end;">
+                ${deleteMode ? '<div class="form-group"><input type="checkbox" class="delete-checkbox" onchange="toggleRowSelection(this)"></div>' : ''}
+                <div class="form-group">
+                    <label>Key:</label>
+                    <input type="text" class="key-input" placeholder="e.g., profession">
+                </div>
+                <div class="form-group">
+                    <label>Value:</label>
+                    <input type="text" class="value-input" placeholder="e.g., Developer">
+                </div>
+                <div class="form-group">
+                    <button class="btn" onclick="removeKeyPair(${keyPairIndex})" style="background: #dc3545; padding: 8px 12px;">Remove</button>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(newRow);
+        keyPairIndex++;
+    }
+
+    function removeKeyPair(index) {
+        const row = document.querySelector(`[data-index="${index}"]`);
+        if (row) {
+            row.remove();
+        }
+    }
+
+    function clearAllKeyPairs() {
+        const container = document.getElementById('key-pairs-container');
+        container.innerHTML = '';
+        keyPairIndex = 0;
+        
+        // Add one empty pair
+        addKeyPair();
+    }
+
+    function toggleDeleteMode() {
+        deleteMode = document.getElementById('delete-mode-checkbox').checked;
+        const rows = document.querySelectorAll('.key-pair-row');
+        
+        rows.forEach(row => {
+            if (deleteMode) {
+                row.classList.add('delete-mode');
+                // Add checkbox if not exists
+                const gridContainer = row.querySelector('.grid-3');
+                if (!row.querySelector('.delete-checkbox')) {
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'form-group';
+                    checkboxDiv.innerHTML = '<input type="checkbox" class="delete-checkbox" onchange="toggleRowSelection(this)">';
+                    gridContainer.insertBefore(checkboxDiv, gridContainer.firstChild);
+                    gridContainer.style.gridTemplateColumns = 'auto 1fr 1fr auto';
+                }
+            } else {
+                row.classList.remove('delete-mode', 'selected');
+                // Remove checkbox
+                const checkbox = row.querySelector('.delete-checkbox');
+                if (checkbox) {
+                    checkbox.parentElement.remove();
+                    row.querySelector('.grid-3').style.gridTemplateColumns = '1fr 1fr auto';
+                }
+            }
+        });
+    }
+
+    function toggleRowSelection(checkbox) {
+        const row = checkbox.closest('.key-pair-row');
+        if (checkbox.checked) {
+            row.classList.add('selected');
+        } else {
+            row.classList.remove('selected');
+        }
+    }
+
+    function getAllKeyPairs() {
+        const rows = document.querySelectorAll('.key-pair-row');
+        const keyPairs = [];
+        
+        rows.forEach(row => {
+            const keyInput = row.querySelector('.key-input');
+            const valueInput = row.querySelector('.value-input');
+            
+            if (keyInput && valueInput && keyInput.value.trim() && valueInput.value.trim()) {
+                keyPairs.push({
+                    key: keyInput.value.trim(),
+                    value: valueInput.value.trim()
+                });
+            }
+        });
+        
+        return keyPairs;
+    }
+
+    function getSelectedKeyPairs() {
+        const rows = document.querySelectorAll('.key-pair-row.selected');
+        const keyPairs = [];
+        
+        rows.forEach(row => {
+            const keyInput = row.querySelector('.key-input');
+            if (keyInput && keyInput.value.trim()) {
+                keyPairs.push({
+                    key: keyInput.value.trim()
+                });
+            }
+        });
+        
+        return keyPairs;
+    }
+
+    async function updateMultipleKeys() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const userId = document.getElementById('bulk-profile-user-id').value;
+            const keyPairs = getAllKeyPairs();
+
+            if (!userId) {
+                throw new Error('User ID is required');
+            }
+
+            if (keyPairs.length === 0) {
+                throw new Error('At least one key-value pair is required');
+            }
+
+            const results = [];
+            
+            // Update each key-value pair sequentially
+            for (const pair of keyPairs) {
+                try {
+                    const result = await makeApiCall('/user/profile/update', 'POST', {
+                        user_id: userId,
+                        key: pair.key,
+                        value: pair.value
+                    });
+                    results.push({ key: pair.key, status: 'success', result });
+                } catch (error) {
+                    results.push({ key: pair.key, status: 'error', error: error.message });
+                }
+            }
+
+            showResponse('profile', {
+                operation: 'bulk_update',
+                total_keys: keyPairs.length,
+                results: results,
+                summary: {
+                    successful: results.filter(r => r.status === 'success').length,
+                    failed: results.filter(r => r.status === 'error').length
+                }
+            });
+        } catch (error) {
+            showResponse('profile', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    async function deleteMultipleKeys() {
+        const button = event.target;
+        const originalText = showLoading(button);
+        
+        try {
+            const userId = document.getElementById('bulk-profile-user-id').value;
+            let keysToDelete;
+
+            if (deleteMode) {
+                keysToDelete = getSelectedKeyPairs();
+                if (keysToDelete.length === 0) {
+                    throw new Error('No keys selected for deletion');
+                }
+            } else {
+                keysToDelete = getAllKeyPairs().map(pair => ({ key: pair.key }));
+            }
+
+            if (!userId) {
+                throw new Error('User ID is required');
+            }
+
+            if (keysToDelete.length === 0) {
+                throw new Error('No keys to delete');
+            }
+
+            const results = [];
+            
+            // Delete each key sequentially
+            for (const keyObj of keysToDelete) {
+                try {
+                    const result = await makeApiCall('/user/profile/delete', 'POST', {
+                        user_id: userId,
+                        key: keyObj.key
+                    });
+                    results.push({ key: keyObj.key, status: 'success', result });
+                } catch (error) {
+                    results.push({ key: keyObj.key, status: 'error', error: error.message });
+                }
+            }
+
+            showResponse('profile', {
+                operation: 'bulk_delete',
+                total_keys: keysToDelete.length,
+                results: results,
+                summary: {
+                    successful: results.filter(r => r.status === 'success').length,
+                    failed: results.filter(r => r.status === 'error').length
+                }
+            });
+
+            // Remove successfully deleted rows in delete mode
+            if (deleteMode) {
+                results.forEach(result => {
+                    if (result.status === 'success') {
+                        const rows = document.querySelectorAll('.key-pair-row');
+                        rows.forEach(row => {
+                            const keyInput = row.querySelector('.key-input');
+                            if (keyInput && keyInput.value.trim() === result.key) {
+                                const checkbox = row.querySelector('.delete-checkbox');
+                                if (checkbox && checkbox.checked) {
+                                    row.remove();
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        } catch (error) {
+            showResponse('profile', { error: error.message }, true);
+        } finally {
+            hideLoading(button, originalText);
+        }
+    }
+
+    // Initialize the interface
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set default values
+        baseUrl = document.getElementById('baseUrl').value;
+        defaultUserId = document.getElementById('defaultUserId').value;
+        
+        // Show the first section by default
+        document.getElementById('crawl-content').classList.add('active');
+        
+        console.log('Backend API Testing Interface loaded successfully!');
+    });
+</script>
+```
+
+</body>
+</html>
