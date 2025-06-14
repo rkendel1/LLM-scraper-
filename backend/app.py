@@ -2,12 +2,13 @@
 
 from flask import Flask, request, jsonify
 import os
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+import json
+import logging
 
 # Initialize Flask app
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Ensure upload folder exists
 os.makedirs("uploads", exist_ok=True)
@@ -17,12 +18,53 @@ from crawler.scrapy_spider import run_crawler
 from processor.cleaner import extract_content
 from embedder.embedding_utils import embed_text
 from llm.pdf_form_filler import generate_with_mistral
-from utils.database import save_to_postgres, get_db
+from utils.database import save_to_postgres, get_db, get_user_profile, update_user_profile
 from utils.web_search import duckduckgo_search, extract_content_from_url
 from utils.quality_filter import is_quality_result
 from utils.delegation_model import should_delegate_query
 from utils.ontology_router import route_query_to_agent
 from utils.forwarder import forward_to_agent
+
+
+# === Helper: Has Changed? ===
+def has_changed(url, text, domain):
+    from processor.change_detector import has_changed as detector
+    return detector(url, text, domain)
+
+
+# === Helper: Download PDFs ===
+def download_pdf(pdf_url):
+    from processor.pdf_downloader import download_pdf
+    return download_pdf(pdf_url)
+
+
+# === Helper: Analyze PDF Forms ===
+def analyze_pdf_form(pdf_path):
+    from processor.pdf_analyzer import analyze_pdf_form
+    return analyze_pdf_form(pdf_path)
+
+
+# === Helper: Fill PDF Form Fields ===
+def fill_pdf_form(pdf_path, filled_path, field_data):
+    from llm.pdf_form_filler import fill_pdf_form
+    return fill_pdf_form(pdf_path, filled_path, field_data)
+
+
+# === Helper: Generate Field Value ===
+def generate_field_value(name, field_type):
+    from llm.pdf_form_filler import generate_field_value
+    return generate_field_value(name, field_type)
+
+
+# === Helper: Build Ontology Graph ===
+def build_ontology(docs, domain):
+    from graph.ontology_builder import build_ontology
+    return build_ontology(docs, domain)
+
+
+def export_graph_json(docs, domain):
+    from graph.ontology_builder import export_graph_json
+    return export_graph_json(docs, domain)
 
 
 # === Route: Start Web Crawl ===
@@ -101,14 +143,18 @@ def start_crawl():
         })
 
     except Exception as e:
-        app.logger.error(f"Error during crawl: {e}")
+        logger.error(f"Error during crawl: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-# === Route: Ask a Question (RAG Pipeline) ===
+# === Route: Ask a Question (RAG + User Profile Aware) ===
 @app.route('/rag/ask', methods=['POST'])
 def ask_question():
+    from langchain.prompts import ChatPromptTemplate
+    from llm.prompt_templates import RAG_PROMPT_TEMPLATE, PROFILE_EXTRACTION_PROMPT
+
     query = request.json.get('question')
+    user_id = request.json.get('user_id')  # Optional
     if not query:
         return jsonify({"error": "Missing question"}), 400
 
@@ -126,7 +172,7 @@ def ask_question():
                     forwarded_answer = forward_to_agent(target_agent, query)
                     return jsonify(forwarded_answer)
 
-            # Step 3: No agent found — fall back to DuckDuckGo search
+            # Step 3: No agent — fall back to web search
             search_urls = duckduckgo_search(query, max_results=5)
             new_docs = []
 
@@ -137,22 +183,32 @@ def ask_question():
             # Re-run hybrid search now that we've added new documents
             context_docs = hybrid_search(query, limit=3)
 
-        # Generate final answer using Mistral
+        # Step 4: Get user profile if available
+        profile = {}
+        if user_id:
+            profile = get_user_profile(user_id)
+
+            # Step 5: Detect and save new profile info from input
+            profile_prompt = PROFILE_EXTRACTION_PROMPT.format(input=query)
+            profile_update_str = generate_with_mistral(profile_prompt)
+            try:
+                profile_update = json.loads(profile_update_str)
+                for key, value in profile_update.items():
+                    update_user_profile(user_id, {"key": key, "value": value})
+                profile.update(profile_update)
+            except:
+                pass  # Not valid JSON
+
+        # Step 6: Generate final answer using Mistral
         context = "\n\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
-        prompt = f"""
-        Answer the following question based on the provided context:
+        full_prompt = RAG_PROMPT_TEMPLATE.format(context=context, question=query)
 
-        Question: {query}
+        answer = generate_with_mistral(full_prompt)
 
-        Context:
-        {context}
-        """
-        answer = generate_with_mistral(prompt)
-
-        # Validate and suggest next steps
+        # Step 7: Validate and improve
         validation_prompt = f"""
         You are a quality assurance assistant.
-
+        
         The user asked: "{query}"
         The system answered: "{answer}"
 
@@ -179,8 +235,38 @@ def ask_question():
             "is_accurate": is_accurate,
             "improved_answer": improved_answer,
             "next_steps": next_steps,
-            "sources": [{"title": d["title"], "url": d.get("url")} for d in context_docs]
+            "sources": [{"title": d["title"], "url": d.get("url")} for d in context_docs],
+            "profile_used": profile
         })
 
     except Exception as e:
+        logger.error(f"Error in /rag/ask: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# === Route: User Profile Routes (optional) ===
+@app.route('/user/profile', methods=['POST'])
+def get_profile():
+    user_id = request.json.get('user_id')
+    profile = get_user_profile(user_id)
+    if profile:
+        return jsonify({"profile": profile})
+    return jsonify({"error": "User not found"}), 404
+
+
+@app.route('/user/profile/update', methods=['POST'])
+def update_profile():
+    data = request.json
+    user_id = data.get('user_id')
+    key = data.get('key')
+    value = data.get('value')
+
+    if not all([user_id, key, value]):
+        return jsonify({"error": "Missing user_id, key, or value"}), 400
+
+    update_user_profile(user_id, {"key": key, "value": value})
+    return jsonify({"status": "updated", "key": key})
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
