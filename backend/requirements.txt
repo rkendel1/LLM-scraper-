@@ -1,0 +1,11 @@
+Flask==2.3.2
+scrapy==2.8.0
+beautifulsoup4==4.12.0
+playwright==1.40.0
+spacy==3.7.0
+langchain==0.0.349
+sentence-transformers==2.2.0
+networkx==3.1
+psycopg2-binary==2.9.9
+faiss-cpu==1.7.0
+pdfkit==1.0.0
