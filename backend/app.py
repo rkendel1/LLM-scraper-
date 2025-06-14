@@ -11,6 +11,11 @@ app = Flask(__name__)
 from graph.ontology_builder import build_ontology, export_graph_json
 from processor.pdf_downloader import download_pdf
 
+from processor.pdf_downloader import download_pdf
+from processor.pdf_analyzer import analyze_pdf_form
+from processor.llm_form_filler import generate_field_value
+from processor.pdf_form_filler import fill_pdf_form
+
 @app.route('/start-crawl', methods=['POST'])
 def start_crawl():
     data = request.json
@@ -32,7 +37,22 @@ def start_crawl():
         pdf_paths = []
         for pdf_url in doc.get('pdf_links', []):
             pdf_path = download_pdf(pdf_url)
-            if pdf_path:
+            if not pdf_path:
+                continue
+
+            analysis = analyze_pdf_form(pdf_path)
+            if analysis['is_form']:
+                field_data = {}
+                for field in analysis['fields']:
+                    name = field['name']
+                    field_type = field['type']
+                    value = generate_field_value(name, field_type)
+                    field_data[name] = value
+
+                filled_path = pdf_path.replace('.pdf', '_filled.pdf')
+                fill_pdf_form(pdf_path, filled_path, field_data)
+                pdf_paths.append(filled_path)
+            else:
                 pdf_paths.append(pdf_path)
 
         embedding = embed_text(content['text'])
