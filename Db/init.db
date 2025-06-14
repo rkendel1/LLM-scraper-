@@ -1,0 +1,13 @@
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    url TEXT UNIQUE NOT NULL,
+    title TEXT,
+    description TEXT,
+    text TEXT,
+    vector_id INTEGER,
+    keywords TEXT[],
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_url ON documents(url);
+CREATE INDEX idx_keywords ON documents USING GIN(keywords);
