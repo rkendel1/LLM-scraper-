@@ -1,0 +1,5 @@
+@app.route('/graph/<domain>')
+def view_graph(domain):
+    with open(f"graphs/{domain}.json") as f:
+        graph_data = f.read()
+    return render_template_string(open("graphs/viewer/index.html").read(), GRAPH_DATA=graph_data)
