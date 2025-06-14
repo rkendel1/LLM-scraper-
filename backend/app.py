@@ -301,7 +301,32 @@ def update_profile():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+@app.route('/auth/register', methods=['POST'])
+def register():
+    email = request.json.get('email')
+    password = request.json.get('password')
 
+    user_id = create_user(email, password)
+    if user_id:
+        # Simulate sending OTP
+        return jsonify({"status": "registered", "user_id": user_id})
+    return jsonify({"error": "Email already exists"}), 400
+
+
+@app.route('/auth/verify-email', methods=['POST'])
+def verify_email():
+    email = request.json.get('email')
+    otp = request.json.get('otp')
+
+    # For now, simulate success
+    return jsonify({"status": "verified", "user_id": 123})
+
+
+@app.route('/auth/request-mail-otp', methods=['POST'])
+def request_mail_otp():
+    user_id = request.json.get('user_id')
+    # In production, call USPS API to send letter
+    return jsonify({"status": "sent", "message": "Code mailed to user's address"})
 
 @app.route('/user/profile/delete', methods=['POST'])
 def delete_profile_key():
