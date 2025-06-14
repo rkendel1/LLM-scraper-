@@ -25,8 +25,12 @@ RUN poetry config virtualenvs.create false \
 # Copy remaining source code
 COPY . .
 
-# Expose port
-EXPOSE 5000
+# Install Playwright browsers (if used)
+RUN playwright install-deps
+RUN playwright install chromium
 
-# Run application
-CMD ["python", "app.py"]
+# Expose port
+EXPOSE 8000
+
+# Run application with Uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
