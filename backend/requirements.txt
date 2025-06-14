@@ -10,3 +10,6 @@ psycopg2-binary==2.9.9
 faiss-cpu==1.7.0
 pdfkit==1.0.0
 trafilatura
+pypdf 
+requests
+ollama
