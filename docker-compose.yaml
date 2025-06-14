@@ -32,22 +32,4 @@ services:
       - ./backend:/app
       - uploads:/app/uploads
 
-  # ⚛️ React Frontend (Vite)
-  frontend:
-    platform: linux/amd64
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "8080:5173"
-    command: npm run dev
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-
-volumes:
-  pgdata:
-  uploads:
+  
