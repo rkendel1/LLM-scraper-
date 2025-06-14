@@ -1,25 +1,20 @@
 # utils/user_utils.py
 
 import os
+import logging
+from typing import Optional, Dict, Any
+
 import psycopg2
 from psycopg2.extras import Json
 from passlib.hash import bcrypt
-from typing import Optional, Dict, Any, Union
-import logging
+
+from .database import get_db
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_db():
-    """Get a database connection"""
-    try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-        logger.info("✅ PostgreSQL connection established.")
-        return conn
-    except Exception as e:
-        logger.error(f"❌ Failed to connect to PostgreSQL: {e}")
-        raise
+
 
 
 def create_user(email: str, password: str, profile: Optional[Dict[str, Any]] = None):

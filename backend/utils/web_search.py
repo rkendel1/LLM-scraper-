@@ -24,9 +24,9 @@ def simple_web_search(query, max_results=5):
     return results
 
 
-def extract_content_from_url(url):
-    downloaded = fetch_url(url)
-    if downloaded:
-        text = extract(downloaded, favor_recall=True)
-        return text
-    return None
+#def extract_content_from_url(url):
+ #   downloaded = fetch_url(url)
+  #  if downloaded:
+   #     text = extract(downloaded, favor_recall=True)
+    #    return text
+   # return None

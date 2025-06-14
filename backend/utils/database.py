@@ -183,3 +183,21 @@ def vector_search(embedding: List[float], limit: int = 5):
     except Exception as e:
         logger.error(f"❌ Vector search error: {e}")
         return []
+
+
+# ---------------- User Profile Utilities ----------------
+def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
+    """Retrieve user profile by user ID"""
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT profile FROM users WHERE id = %s", (user_id,))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        return result[0] if result else None
+    except Exception as e:
+        logger.error(f"❌ Error fetching user profile: {e}")
+        return None

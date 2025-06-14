@@ -9,7 +9,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl gcc build-essential ca-certificates git \
+    curl gcc build-essential ca-certificates git libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry

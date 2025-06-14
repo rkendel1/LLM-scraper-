@@ -5,6 +5,13 @@ import json
 import logging
 import os
 import threading
+from typing import Optional, List, Dict, Any
+
+import psycopg2
+from psycopg2.extras import Json
+
+# Optional: If you're calling embed_text inside functions, you can move this up for clarity
+# from embedder.embedding_utils import embed_text
 
 database_url = os.getenv("DATABASE_URL")
 ollama_host = os.getenv("OLLAMA_HOST")
@@ -24,8 +31,9 @@ from crawler.scrapy_spider import run_crawler
 from processor.cleaner import extract_content
 from embedder.embedding_utils import embed_text
 from llm.pdf_form_filler import generate_with_mistral
-from utils.database import save_to_postgres, get_db, get_user_profile, update_user_profile
-from utils.web_search import duckduckgo_search, extract_content_from_url
+from utils.database import save_to_postgres, get_db
+from utils.user_utils import update_user_profile, get_user_profile
+from utils.web_search import simple_web_search #extract_content_from_url
 from utils.quality_filter import is_quality_result
 from utils.delegation_model import should_delegate_query
 from utils.ontology_router import route_query_to_agent
@@ -145,7 +153,7 @@ def ask_question():
                 target_agent = route_query_to_agent(query)
                 if target_agent:
                     return jsonify(forward_to_agent(target_agent, query))
-            search_urls = duckduckgo_search(query, max_results=5)
+            search_urls = simple_web_search(query, max_results=5)
             new_docs = [url for url in search_urls if is_quality_result(url)]
             context_docs = hybrid_search(query, limit=3)
         profile = get_user_profile(user_id) if user_id else {}
