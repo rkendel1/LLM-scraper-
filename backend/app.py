@@ -249,36 +249,29 @@ def hybrid_search():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+# backend/app.py
 
 @app.route('/rag/ask', methods=['POST'])
 def ask_question():
+    from utils.ontology_router import route_query_to_agent
+
     query = request.json.get('question')
     if not query:
         return jsonify({"error": "Missing question"}), 400
 
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        embedding = embed_text(query)
+        # Try answering locally first
+        context_docs = hybrid_search(query, limit=3)
+        if not context_docs:
+            # No local results — decide whether to forward
+            should_delegate = should_delegate_query(query)
+            if should_delegate:
+                target_agent = route_query_to_agent(query)
+                if target_agent:
+                    forwarded_answer = forward_to_agent(target_agent, query)
+                    return jsonify(forwarded_answer)
 
-        cur.execute("""
-            SELECT id, title, text, 1 - (embedding <=> %s::vector) AS similarity
-            FROM documents
-            ORDER BY embedding <-> %s::vector
-            LIMIT 3
-        """, (embedding, embedding))
-
-        context_docs = [{
-            "id": r[0],
-            "title": r[1],
-            "text": r[2],
-            "similarity": r[3]
-        } for r in cur.fetchall()]
-        cur.close()
-        conn.close()
-
-        # Generate prompt
+        # Generate local answer
         context = "\n\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
         prompt = f"""
         Answer the following question based on the provided context:
@@ -298,7 +291,7 @@ def ask_question():
         The user asked: "{query}"
         The system answered: "{answer}"
 
-        Based on the context below, is the answer accurate? If not, what should be done?
+        Based on the context below, is the answer accurate?
 
         Context:
         {context}
@@ -306,27 +299,12 @@ def ask_question():
         Please respond with:
         - Yes/No for accuracy
         - A corrected or improved version of the answer
-        - Suggested next steps (e.g., refine query, check more docs, etc.)
+        - Suggested next steps
         """
         validation_response = generate_with_mistral(validation_prompt)
+        ...
 
-        lines = validation_response.strip().split('\n')
-        is_accurate = lines[0].lower().startswith("yes")
-        improved_answer = lines[2] if len(lines) > 2 else answer
-        next_steps = lines[3] if len(lines) > 3 else "No specific next steps."
-
-        return jsonify({
-            "original_query": query,
-            "initial_answer": answer,
-            "is_accurate": is_accurate,
-            "improved_answer": improved_answer,
-            "next_steps": next_steps,
-            "sources": [{"title": d["title"], "url": d.get("url")} for d in context_docs]
-        })
+        return jsonify({...})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
