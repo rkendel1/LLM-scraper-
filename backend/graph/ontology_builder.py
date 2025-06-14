@@ -39,3 +39,10 @@ def resolve_url(href, domain):
         return href
     else:
         return f"https://{domain}{href}" 
+def export_graph_json(G, domain):
+    nodes = [{"id": n, "title": G.nodes[n].get("title", n)} for n in G.nodes]
+    edges = [{"source": u, "target": v} for u, v in G.edges]
+
+    data = {"nodes": nodes, "links": edges}
+    with open(f"graphs/{domain}.json", "w") as f:
+        json.dump(data, f)
