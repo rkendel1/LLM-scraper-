@@ -30,3 +30,19 @@ def start_crawl():
     depth = data.get('depth', 2)
 
     if not domain:
+
+@app.route('/query', methods=['POST'])
+def hybrid_search():
+    query = request.json.get('query')
+    embedding = embed_text(query)
+    
+    results = db.execute("""
+        SELECT id, title, text,
+               ts_rank(to_tsvector(text), plainto_tsquery(%s)) AS keyword_score,
+               1 - (embedding <=> %s::vector) AS semantic_score,
+               (ts_rank(to_tsvector(text), plainto_tsquery(%s)) * 0.4 +
+                (1 - (embedding <=> %s::vector)) * 0.6) AS hybrid_score
+        FROM documents
+        ORDER BY hybrid_score DESC
+        LIMIT 5
+    """, (query, embedding, query, embedding))
