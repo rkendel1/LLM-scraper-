@@ -7,6 +7,9 @@ import psycopg2
 
 app = Flask(__name__)
 
+
+from graph.ontology_builder import build_ontology, export_graph_json
+
 @app.route('/start-crawl', methods=['POST'])
 def start_crawl():
     data = request.json
@@ -14,23 +17,26 @@ def start_crawl():
     depth = data.get('depth', 2)
 
     docs = run_crawler(domain, depth)
-    processed_docs = []
+    updated_docs = []
 
     for doc in docs:
         content = extract_content(doc['html'])
+        if not content:
+            continue
+
+        if not has_changed(doc['url'], content['text'], domain):
+            continue
+
         embedding = embed_text(content['text'])
+        save_to_postgres(content, doc['url'], embedding)
+        updated_docs.append(doc)
 
-        save_to_postgres(
-            content['title'],
-            content['description'],
-            content['text'],
-            doc['url'],
-            embedding
-        )
-        processed_docs.append(doc['url'])
+    # Build ontology after updating
+    if updated_docs:
+        G = build_ontology(updated_docs, domain)
+        export_graph_json(G, domain)
 
-    return jsonify({"status": "completed", "docs": len(processed_docs)})
-
+    return jsonify({"status": "completed", "docs_updated": len(updated_docs)})
 
 def save_to_postgres(title, description, text, url, embedding):
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
