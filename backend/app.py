@@ -15,19 +15,19 @@ from graph.ontology_builder import build_ontology, export_graph_json
 from utils.database import save_to_postgres
 from processor.change_detector import has_changed
 
+# Initialize Flask app
 app = Flask(__name__)
 
 # Ensure directories exist
 os.makedirs("pdfs", exist_ok=True)
 
-# Database connection (move to utils/database.py ideally)
+
+# === Helper: Get DB Connection ===
 def get_db():
-    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-    return conn
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
-# === Routes ===
-
+# === Route: Start Web Crawl ===
 @app.route('/start-crawl', methods=['POST'])
 def start_crawl():
     data = request.get_json()
@@ -110,17 +110,14 @@ def start_crawl():
         return jsonify({"error": str(e)}), 500
 
 
+# === Route: Serve PDFs ===
 @app.route('/pdf/<filename>')
 def serve_pdf_file(filename):
     return send_from_directory('pdfs', filename)
 
 
-@app.route('/query', methods=['POST'])
-def hybrid_search():
-    query = request.json.get('query')
-    if not query:
-        return jsonify({"error": "Missing query"}), 400
-
+# === Helper: Hybrid Search Function ===
+def hybrid_search(query, limit=5):
     embedding = embed_text(query)
     conn = get_db()
     cur = conn.cursor()
@@ -134,77 +131,88 @@ def hybrid_search():
                     (1 - (embedding <=> %s::vector)) * 0.6) AS hybrid_score
             FROM documents
             ORDER BY hybrid_score DESC
-            LIMIT 5
-        """, (query, embedding, query, embedding))
+            LIMIT %s
+        """, (query, embedding, query, embedding, limit))
 
         results = cur.fetchall()
         cur.close()
         conn.close()
 
-        return jsonify([{
+        return [{
             "id": r[0],
             "title": r[1],
-            "text_snippet": r[2][:300],
+            "text": r[2],
             "keyword_score": r[3],
             "semantic_score": r[4],
             "hybrid_score": r[5]
-        } for r in results])
+        } for r in results]
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("Hybrid search error:", e)
+        return []
 
 
+# === Route: RAG Ask with Validation & Next Steps ===
 @app.route('/rag/ask', methods=['POST'])
 def ask_question():
+    from llm.pdf_form_filler import generate_with_mistral
+
     query = request.json.get('question')
     if not query:
         return jsonify({"error": "Missing question"}), 400
 
-    # Get relevant documents using vector search
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        embedding = embed_text(query)
+    # Step 1: Get relevant documents using hybrid search
+    context_docs = hybrid_search(query, limit=3)
+    if not context_docs:
+        return jsonify({"answer": "No relevant documents found."})
 
-        cur.execute("""
-            SELECT id, title, text, 1 - (embedding <=> %s::vector) AS similarity
-            FROM documents
-            ORDER BY embedding <-> %s::vector
-            LIMIT 3
-        """, (embedding, embedding))
+    # Step 2: Generate initial answer
+    context = "\n\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
+    prompt = f"""
+    Answer the following question based on the provided context:
 
-        context_docs = [{
-            "id": r[0],
-            "title": r[1],
-            "text": r[2],
-            "similarity": r[3]
-        } for r in cur.fetchall()]
-        cur.close()
-        conn.close()
+    Question: {query}
 
-        # Generate prompt
-        context = "\n\n".join([f"{d['title']}\n{d['text'][:300]}" for d in context_docs])
-        prompt = f"""
-        Answer the following question based on the provided context:
+    Context:
+    {context}
+    """
+    answer = generate_with_mistral(prompt)
 
-        Question: {query}
+    # Step 3: Validate and suggest next steps
+    validation_prompt = f"""
+    You are a quality assurance assistant.
 
-        Context:
-        {context}
-        """
+    The user asked: "{query}"
+    The system answered: "{answer}"
 
-        # Call Mistral via Ollama or local model
-        from llm.pdf_form_filler import generate_with_mistral
-        answer = generate_with_mistral(prompt)
+    Based on the context below, is the answer accurate? If not, what should be done?
 
-        return jsonify({
-            "answer": answer,
-            "sources": [{"title": d["title"], "url": d["source_id"]} for d in context_docs]
-        })
+    Context:
+    {context}
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    Please respond with:
+    - Yes/No for accuracy
+    - A corrected or improved version of the answer
+    - Suggested next steps (e.g., refine query, check more docs, etc.)
+    """
+    validation_response = generate_with_mistral(validation_prompt)
+
+    # Parse response manually
+    lines = validation_response.strip().split('\n')
+    is_accurate = lines[0].lower().startswith("yes")
+    improved_answer = lines[2] if len(lines) > 2 else answer
+    next_steps = lines[3] if len(lines) > 3 else "No specific next steps."
+
+    return jsonify({
+        "original_query": query,
+        "initial_answer": answer,
+        "is_accurate": is_accurate,
+        "improved_answer": improved_answer,
+        "next_steps": next_steps,
+        "sources": [{"title": d["title"], "url": d["url"]} for d in context_docs]
+    })
 
 
+# === Run App ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
