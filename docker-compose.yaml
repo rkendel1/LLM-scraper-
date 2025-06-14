@@ -21,16 +21,4 @@ services:
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: postgresql://scraper:scraperpass@postgres:5432/scraperdb
-    volumes:
-      - ./backend:/app
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-
-volumes:
-  pgdata:
+      DATABASE_URL: postgresql://scraper:scr
