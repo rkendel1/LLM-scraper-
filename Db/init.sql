@@ -29,3 +29,12 @@ CREATE TABLE document_relations (
     relation_type TEXT DEFAULT 'linked',
     weight FLOAT DEFAULT 1.0
 );
+-- Fast lookup by source
+CREATE INDEX idx_source_type ON documents(source_type);
+CREATE INDEX idx_source_id ON documents(source_id);
+
+-- Keywords and full-text search
+CREATE INDEX idx_keywords ON documents USING GIN(keywords);
+
+-- Vector search
+CREATE INDEX idx_embedding ON documents USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
