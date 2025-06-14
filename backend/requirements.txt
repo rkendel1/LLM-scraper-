@@ -26,6 +26,11 @@ docx2txt==0.8
 langdetect==1.0.9
 spacy==3.7.0
 
+mcp-server==0.1.0
+uvicorn==0.21.1
+fastapi==0.95.0
+requests==2.31.0
+
 # Utilities
 requests==2.31.0
 Werkzeug==3.0.1
