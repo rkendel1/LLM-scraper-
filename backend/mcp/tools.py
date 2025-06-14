@@ -1,7 +1,5 @@
-# mcp/tools.py
-
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from mcp.server import ToolResult
 
 # Define all tools available via MCP
@@ -43,15 +41,28 @@ def execute_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult:
     """
     Executes the specified tool with given parameters.
     """
-
     if tool_name == "rag.ask":
+        # Import here to avoid circular dependencies
         from backend.app import ask_question
-        result = ask_question({"question": parameters["question"]})
+        
+        # Simulate Flask's request object structure for compatibility
+        class FakeRequest:
+            def get_json(self):
+                return {"question": parameters["question"]}
+        
+        result = ask_question(FakeRequest())
         return ToolResult(content=result)
 
     elif tool_name == "query.hybrid":
+        # Import here to avoid circular dependencies
         from backend.app import hybrid_search
-        result = hybrid_search(parameters["query"])
+        
+        # Simulate Flask's request object structure for compatibility
+        class FakeRequest:
+            def get_json(self):
+                return {"query": parameters["query"]}
+        
+        result = hybrid_search(FakeRequest())
         return ToolResult(content={"results": result})
 
     elif tool_name == "file.read":
@@ -67,8 +78,13 @@ def execute_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult:
         from processor.pdf_downloader import download_pdf
         file_path = download_pdf(parameters["url"])
         from processor.cleaner import extract_content
-        with open(file_path, 'rb') as f:
-            pdf_text = f.read().decode('utf-8', errors='ignore')
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                pdf_text = f.read()
+        except UnicodeDecodeError:
+            with open(file_path, 'rb') as f:
+                pdf_text = f.read().decode('utf-8', errors='ignore')
+                
         cleaned = extract_content(pdf_text)
         return ToolResult(content={"file_path": file_path, "text": cleaned['text']})
 
@@ -89,4 +105,8 @@ def execute_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult:
                 return ToolResult(content=response.json())
             else:
                 return ToolResult(error=f"External agent returned {response.status_code}: {response.text}")
-        except
+        except Exception as e:
+            return ToolResult(error=str(e))
+    
+    else:
+        return ToolResult(error=f"Tool '{tool_name}' not found")
