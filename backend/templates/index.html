@@ -1,1 +1,308 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🚀 Backend API Testing Interface</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; }
+        .section { margin: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .side-panel { position: fixed; right: 0; top: 0; width: 300px; height: 100%; background: #f0f0f0; padding: 10px; overflow-y: auto; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Backend API Testing Interface</h1>
+    <h2>Comprehensive testing tool for your Flask backend endpoints</h2>
+
+    <div class="section">
+        <h3>⚙️ Configuration</h3>
+        <label>Base URL: <input type="text" id="base-url"></label><br>
+        <label>Default User ID: <input type="text" id="default-user-id"></label>
+    </div>
+
+    <div class="section">
+        <h3>🕷️ Web Crawling</h3>
+        <label>Domain: <input type="text" id="crawl-domain"></label><br>
+        <label>Depth: <input type="number" id="crawl-depth" value="2"></label><br>
+        <button onclick="startCrawl()">Start Crawl</button>
+        <button onclick="stopCrawl()">Stop Crawl</button>
+        <button onclick="clearResponse('crawl-response')">Clear Response</button>
+        <pre id="crawl-response"></pre>
+    </div>
+
+    <div class="section">
+        <h3>🤖 RAG Question Answering</h3>
+        <label>Question: <input type="text" id="rag-question"></label><br>
+        <label>User ID (optional): <input type="text" id="rag-user-id"></label><br>
+        <button onclick="askQuestion()">Ask Question</button>
+        <button onclick="clearResponse('rag-response')">Clear Response</button>
+        <pre id="rag-response"></pre>
+    </div>
+
+    <div class="section">
+        <h3>🔐 User Authentication</h3>
+        <div>
+            <h4>Register User</h4>
+            <label>Email: <input type="email" id="reg-email"></label><br>
+            <label>Password: <input type="password" id="reg-password"></label><br>
+            <button onclick="registerUser()">Register</button>
+        </div>
+        <div>
+            <h4>Verify Email</h4>
+            <label>Email: <input type="email" id="verify-email"></label><br>
+            <label>OTP: <input type="text" id="verify-otp"></label><br>
+            <button onclick="verifyEmail()">Verify</button>
+        </div>
+        <div>
+            <h4>Request Mail OTP</h4>
+            <label>User ID: <input type="text" id="otp-user-id"></label><br>
+            <button onclick="requestMailOTP()">Request Mail OTP</button>
+        </div>
+        <pre id="auth-response"></pre>
+    </div>
+
+    <div class="section">
+        <h3>👤 User Profile Management</h3>
+        <div>
+            <h4>Get Profile</h4>
+            <label>User ID: <input type="text" id="get-profile-id"></label><br>
+            <button onclick="getProfile()">Get Profile</button>
+        </div>
+        <div>
+            <h4>Single Key Operations</h4>
+            <label>User ID: <input type="text" id="key-op-user-id"></label><br>
+            <label>Key: <input type="text" id="key-op-key"></label><br>
+            <label>Value: <input type="text" id="key-op-value"></label><br>
+            <button onclick="updateKey()">Update Key</button>
+            <button onclick="deleteKey()">Delete Key</button>
+        </div>
+        <div>
+            <h4>Bulk Profile Management</h4>
+            <label>User ID: <input type="text" id="bulk-user-id"></label><br>
+            <div id="key-pairs">
+                <div>
+                    <label>Key: <input type="text" class="bulk-key"></label>
+                    <label>Value: <input type="text" class="bulk-value"></label>
+                    <input type="checkbox" class="bulk-remove"> Remove
+                </div>
+            </div>
+            <button onclick="addKeyPair()">+ Add Key Pair</button>
+            <button onclick="updateAllKeys()">Update All Keys</button>
+            <button onclick="deleteSelectedKeys()">Delete Selected Keys</button>
+            <button onclick="clearAll()">Clear All</button>
+            <label><input type="checkbox" id="delete-mode"> Delete Mode (check keys to delete)</label>
+        </div>
+        <pre id="profile-response"></pre>
+    </div>
+
+    <div class="section">
+        <h3>📤 Document Upload</h3>
+        <input type="file" id="file-input" multiple>
+        <button onclick="uploadFiles()">Upload Files</button>
+        <pre id="upload-response"></pre>
+    </div>
+
+    <div class="section">
+        <h3>🌐 Ontology Graph</h3>
+        <label>Domain: <input type="text" id="graph-domain"></label><br>
+        <button onclick="viewGraph()">View Graph</button>
+        <iframe id="graph-frame" width="600" height="400" style="border: none;"></iframe>
+    </div>
+
+    <div class="side-panel">
+        <h3>Request/Response Log</h3>
+        <pre id="request-log"></pre>
+    </div>
+
+    <script>
+        function logRequest(method, url, data, response) {
+            const log = document.getElementById('request-log');
+            const entry = `[${new Date().toISOString()}] ${method} ${url}\nRequest: ${JSON.stringify(data, null, 2)}\nResponse: ${JSON.stringify(response, null, 2)}\n\n`;
+            log.innerHTML += entry;
+        }
+
+        function clearResponse(id) {
+            document.getElementById(id).innerText = '';
+        }
+
+        function startCrawl() {
+            const domain = document.getElementById('crawl-domain').value;
+            const depth = document.getElementById('crawl-depth').value;
+            fetch('/start-crawl', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain, depth }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('crawl-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/start-crawl', { domain, depth }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function stopCrawl() {
+            fetch('/stop-crawl', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('crawl-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/stop-crawl', {}, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function askQuestion() {
+            const question = document.getElementById('rag-question').value;
+            const userId = document.getElementById('rag-user-id').value;
+            fetch('/rag/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, user_id: userId }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('rag-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/rag/ask', { question, user_id: userId }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function registerUser() {
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('auth-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/auth/register', { email, password }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function verifyEmail() {
+            const email = document.getElementById('verify-email').value;
+            const otp = document.getElementById('verify-otp').value;
+            fetch('/auth/verify-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, otp }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('auth-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/auth/verify-email', { email, otp }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function requestMailOTP() {
+            const userId = document.getElementById('otp-user-id').value;
+            fetch('/auth/request-mail-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('auth-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/auth/request-mail-otp', { user_id: userId }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function getProfile() {
+            const userId = document.getElementById('get-profile-id').value;
+            fetch('/user/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('profile-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/user/profile', { user_id: userId }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function updateKey() {
+            const userId = document.getElementById('key-op-user-id').value;
+            const key = document.getElementById('key-op-key').value;
+            const value = document.getElementById('key-op-value').value;
+            fetch('/user/profile/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, key, value }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('profile-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/user/profile/update', { user_id: userId, key, value }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function deleteKey() {
+            const userId = document.getElementById('key-op-user-id').value;
+            const key = document.getElementById('key-op-key').value;
+            fetch('/user/profile/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, key }) })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('profile-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/user/profile/delete', { user_id: userId, key }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function addKeyPair() {
+            const container = document.getElementById('key-pairs');
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label>Key: <input type="text" class="bulk-key"></label>
+                <label>Value: <input type="text" class="bulk-value"></label>
+                <input type="checkbox" class="bulk-remove"> Remove
+            `;
+            container.appendChild(div);
+        }
+
+        function updateAllKeys() {
+            const userId = document.getElementById('bulk-user-id').value;
+            const keyPairs = Array.from(document.querySelectorAll('#key-pairs div')).map(div => ({
+                key: div.querySelector('.bulk-key').value,
+                value: div.querySelector('.bulk-value').value
+            })).filter(pair => pair.key && pair.value);
+            fetch('/user/profile/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, key: keyPairs[0].key, value: keyPairs[0].value }) }) // Simplified for single update
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('profile-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/user/profile/update', { user_id: userId, key: keyPairs[0].key, value: keyPairs[0].value }, data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function deleteSelectedKeys() {
+            const userId = document.getElementById('bulk-user-id').value;
+            const keys = Array.from(document.querySelectorAll('#key-pairs div .bulk-remove:checked'))
+                .map(cb => cb.parentElement.querySelector('.bulk-key').value)
+                .filter(key => key);
+            keys.forEach(key => {
+                fetch('/user/profile/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, key }) })
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('profile-response').innerText = JSON.stringify(data, null, 2);
+                        logRequest('POST', '/user/profile/delete', { user_id: userId, key }, data);
+                    })
+                    .catch(error => console.error('Error:', error));
+            });
+        }
+
+        function clearAll() {
+            document.getElementById('key-pairs').innerHTML = `
+                <div>
+                    <label>Key: <input type="text" class="bulk-key"></label>
+                    <label>Value: <input type="text" class="bulk-value"></label>
+                    <input type="checkbox" class="bulk-remove"> Remove
+                </div>
+            `;
+        }
+
+        function uploadFiles() {
+            const files = document.getElementById('file-input').files;
+            const formData = new FormData();
+            for (let file of files) {
+                formData.append('files', file);
+            }
+            fetch('/upload', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('upload-response').innerText = JSON.stringify(data, null, 2);
+                    logRequest('POST', '/upload', Array.from(files).map(f => f.name), data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function viewGraph() {
+            const domain = document.getElementById('graph-domain').value;
+            document.getElementById('graph-frame').src = `/graph/${domain}`;
+        }
+    </script>
+</body>
+</html>
