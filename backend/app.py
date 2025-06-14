@@ -46,3 +46,23 @@ def hybrid_search():
         ORDER BY hybrid_score DESC
         LIMIT 5
     """, (query, embedding, query, embedding))
+
+@app.route('/rag/ask', methods=['POST'])
+def ask_question():
+    query = request.json.get('question')
+    context_docs = vector_search(query, limit=3)
+
+    prompt = f"""
+    Answer this question based on the provided context:
+
+    Question: {query}
+
+    Context:
+    {' '.join([d['text'][:300] for d in context_docs])}
+    """
+
+    answer = generate_with_mistral(prompt)
+    return jsonify({
+        "answer": answer,
+        "sources": [{"title": d["title"], "url": d["source_id"]} for d in context_docs]
+    })
