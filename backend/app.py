@@ -3,31 +3,56 @@
 from flask import Flask, request, jsonify, send_from_directory
 import os
 import psycopg2
-
-# Import modules
-from crawler.scrapy_spider import run_crawler
-from processor.cleaner import extract_content
-from embedder.embedding_utils import embed_text
-from processor.pdf_downloader import download_pdf
-from processor.pdf_analyzer import analyze_pdf_form
-from llm.pdf_form_filler import generate_field_value, fill_pdf_form
-from graph.ontology_builder import build_ontology, export_graph_json
-from utils.database import save_to_postgres
-from processor.change_detector import has_changed
+from werkzeug.utils import secure_filename
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Ensure directories exist
-os.makedirs("pdfs", exist_ok=True)
+# Config
+UPLOAD_FOLDER = 'uploads/'
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'docx', 'md'}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# === Import Modules ===
+from crawler.scrapy_spider import run_crawler
+from processor.cleaner import extract_content
+from embedder.embedding_utils import embed_text
+from processor.pdf_analyzer import analyze_pdf_form, fill_pdf_form
+from llm.pdf_form_filler import generate_with_mistral
+from utils.database import save_to_postgres, get_db
+from processor.change_detector import has_changed
 
 
-# === Helper: Get DB Connection ===
-def get_db():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+# === Helper Functions ===
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def extract_text_from_file(file_path):
+    ext = file_path.split('.')[-1].lower()
+
+    if ext == 'pdf':
+        from PyPDF2 import PdfReader
+        with open(file_path, 'rb') as f:
+            reader = PdfReader(f)
+            return ' '.join([page.extract_text() for page in reader.pages if page.extract_text()])
+
+    elif ext in ['txt', 'md']:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    elif ext == 'docx':
+        import docx2txt
+        return docx2txt.process(file_path)
+
+    else:
+        import textract
+        return textract.process(file_path).decode('utf-8')
 
 
-# === Route: Start Web Crawl ===
+# === Routes ===
+
 @app.route('/start-crawl', methods=['POST'])
 def start_crawl():
     data = request.get_json()
@@ -87,10 +112,7 @@ def start_crawl():
                 embedding=embedding,
                 pdf_paths=pdf_paths,
                 source_type='web',
-                metadata={
-                    'domain': domain,
-                    'source_type': 'web'
-                }
+                metadata={'domain': domain}
             )
             updated_docs.append(doc)
 
@@ -110,14 +132,94 @@ def start_crawl():
         return jsonify({"error": str(e)}), 500
 
 
-# === Route: Serve PDFs ===
-@app.route('/pdf/<filename>')
-def serve_pdf_file(filename):
-    return send_from_directory('pdfs', filename)
+@app.route('/upload/pdf', methods=['POST'])
+def upload_pdf():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+
+        try:
+            # Extract text
+            text = extract_text_from_file(file_path)
+            cleaned_text = extract_content(text)['text']  # Use cleaner.py
+            embedding = embed_text(cleaned_text)
+
+            # Save to DB
+            save_to_postgres(
+                title=filename,
+                description=cleaned_text[:200],
+                text=cleaned_text,
+                url=None,
+                embedding=embedding,
+                pdf_paths=[file_path],
+                source_type='pdf',
+                metadata={"filename": filename}
+            )
+
+            return jsonify({
+                "status": "success",
+                "message": "PDF processed and saved",
+                "title": filename,
+                "text_snippet": cleaned_text[:300]
+            })
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "File type not supported"}), 400
 
 
-# === Helper: Hybrid Search Function ===
-def hybrid_search(query, limit=5):
+@app.route('/upload/text', methods=['POST'])
+def upload_text():
+    data = request.get_json()
+    raw_text = data.get('text')
+    title = data.get('title', 'Untitled')
+    source_id = data.get('source_id')
+
+    if not raw_text:
+        return jsonify({"error": "Missing text"}), 400
+
+    try:
+        # Clean and chunk
+        cleaned_text = extract_content("<p>" + raw_text + "</p>")['text']
+        embedding = embed_text(cleaned_text)
+
+        # Save to DB
+        save_to_postgres(
+            title=title,
+            description=cleaned_text[:200],
+            text=cleaned_text,
+            url=None,
+            embedding=embedding,
+            pdf_paths=[],
+            source_type='manual',
+            metadata={"source_id": source_id}
+        )
+
+        return jsonify({
+            "status": "success",
+            "title": title,
+            "text_snippet": cleaned_text[:300]
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/query', methods=['POST'])
+def hybrid_search():
+    query = request.json.get('query')
+    if not query:
+        return jsonify({"error": "Missing query"}), 400
+
     embedding = embed_text(query)
     conn = get_db()
     cur = conn.cursor()
@@ -128,91 +230,103 @@ def hybrid_search(query, limit=5):
                    ts_rank(to_tsvector(text), plainto_tsquery(%s)) AS keyword_score,
                    1 - (embedding <=> %s::vector) AS semantic_score,
                    (ts_rank(to_tsvector(text), plainto_tsquery(%s)) * 0.4 +
-                    (1 - (embedding <=> %s::vector)) * 0.6) AS hybrid_score
+                    (1 - (embedding <=> %s::vector)) * 0.6 AS hybrid_score
             FROM documents
             ORDER BY hybrid_score DESC
-            LIMIT %s
-        """, (query, embedding, query, embedding, limit))
+            LIMIT 5
+        """, (query, embedding, query, embedding))
 
         results = cur.fetchall()
         cur.close()
         conn.close()
 
-        return [{
+        return jsonify([{
             "id": r[0],
             "title": r[1],
-            "text": r[2],
-            "keyword_score": r[3],
-            "semantic_score": r[4],
+            "text_snippet": r[2][:300],
             "hybrid_score": r[5]
-        } for r in results]
+        } for r in results])
 
     except Exception as e:
-        print("Hybrid search error:", e)
-        return []
+        return jsonify({"error": str(e)}), 500
 
 
-# === Route: RAG Ask with Validation & Next Steps ===
 @app.route('/rag/ask', methods=['POST'])
 def ask_question():
-    from llm.pdf_form_filler import generate_with_mistral
-
     query = request.json.get('question')
     if not query:
         return jsonify({"error": "Missing question"}), 400
 
-    # Step 1: Get relevant documents using hybrid search
-    context_docs = hybrid_search(query, limit=3)
-    if not context_docs:
-        return jsonify({"answer": "No relevant documents found."})
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        embedding = embed_text(query)
 
-    # Step 2: Generate initial answer
-    context = "\n\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
-    prompt = f"""
-    Answer the following question based on the provided context:
+        cur.execute("""
+            SELECT id, title, text, 1 - (embedding <=> %s::vector) AS similarity
+            FROM documents
+            ORDER BY embedding <-> %s::vector
+            LIMIT 3
+        """, (embedding, embedding))
 
-    Question: {query}
+        context_docs = [{
+            "id": r[0],
+            "title": r[1],
+            "text": r[2],
+            "similarity": r[3]
+        } for r in cur.fetchall()]
+        cur.close()
+        conn.close()
 
-    Context:
-    {context}
-    """
-    answer = generate_with_mistral(prompt)
+        # Generate prompt
+        context = "\n\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
+        prompt = f"""
+        Answer the following question based on the provided context:
 
-    # Step 3: Validate and suggest next steps
-    validation_prompt = f"""
-    You are a quality assurance assistant.
+        Question: {query}
 
-    The user asked: "{query}"
-    The system answered: "{answer}"
+        Context:
+        {context}
+        """
 
-    Based on the context below, is the answer accurate? If not, what should be done?
+        answer = generate_with_mistral(prompt)
 
-    Context:
-    {context}
+        # Validate and suggest next steps
+        validation_prompt = f"""
+        You are a quality assurance assistant.
 
-    Please respond with:
-    - Yes/No for accuracy
-    - A corrected or improved version of the answer
-    - Suggested next steps (e.g., refine query, check more docs, etc.)
-    """
-    validation_response = generate_with_mistral(validation_prompt)
+        The user asked: "{query}"
+        The system answered: "{answer}"
 
-    # Parse response manually
-    lines = validation_response.strip().split('\n')
-    is_accurate = lines[0].lower().startswith("yes")
-    improved_answer = lines[2] if len(lines) > 2 else answer
-    next_steps = lines[3] if len(lines) > 3 else "No specific next steps."
+        Based on the context below, is the answer accurate? If not, what should be done?
 
-    return jsonify({
-        "original_query": query,
-        "initial_answer": answer,
-        "is_accurate": is_accurate,
-        "improved_answer": improved_answer,
-        "next_steps": next_steps,
-        "sources": [{"title": d["title"], "url": d["url"]} for d in context_docs]
-    })
+        Context:
+        {context}
+
+        Please respond with:
+        - Yes/No for accuracy
+        - A corrected or improved version of the answer
+        - Suggested next steps (e.g., refine query, check more docs, etc.)
+        """
+        validation_response = generate_with_mistral(validation_prompt)
+
+        lines = validation_response.strip().split('\n')
+        is_accurate = lines[0].lower().startswith("yes")
+        improved_answer = lines[2] if len(lines) > 2 else answer
+        next_steps = lines[3] if len(lines) > 3 else "No specific next steps."
+
+        return jsonify({
+            "original_query": query,
+            "initial_answer": answer,
+            "is_accurate": is_accurate,
+            "improved_answer": improved_answer,
+            "next_steps": next_steps,
+            "sources": [{"title": d["title"], "url": d.get("url")} for d in context_docs]
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# === Run App ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
