@@ -9,6 +9,7 @@ app = Flask(__name__)
 
 
 from graph.ontology_builder import build_ontology, export_graph_json
+from processor.pdf_downloader import download_pdf
 
 @app.route('/start-crawl', methods=['POST'])
 def start_crawl():
@@ -27,17 +28,19 @@ def start_crawl():
         if not has_changed(doc['url'], content['text'], domain):
             continue
 
+        # Handle PDF links
+        pdf_paths = []
+        for pdf_url in doc.get('pdf_links', []):
+            pdf_path = download_pdf(pdf_url)
+            if pdf_path:
+                pdf_paths.append(pdf_path)
+
         embedding = embed_text(content['text'])
-        save_to_postgres(content, doc['url'], embedding)
+        save_to_postgres(content, doc['url'], embedding, pdf_paths)
         updated_docs.append(doc)
 
-    # Build ontology after updating
-    if updated_docs:
-        G = build_ontology(updated_docs, domain)
-        export_graph_json(G, domain)
-
     return jsonify({"status": "completed", "docs_updated": len(updated_docs)})
-
+    
 def save_to_postgres(title, description, text, url, embedding):
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     cur = conn.cursor()
