@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from crawler.scrapy_spider import run_crawler
 from processor.cleaner import extract_content
+from embedder.embedding_utils import embed_text
 import os
 import psycopg2
 
@@ -19,9 +20,12 @@ def start_crawl():
     for doc in docs:
         content = extract_content(doc['html'])
 
+        embedding = embed_text(content['text'])
+
         processed_doc = {
             **content,
             'url': doc['url'],
+            'embedding': embedding
         }
 
         save_to_postgres(processed_doc)
@@ -29,19 +33,47 @@ def start_crawl():
 
     return jsonify({"status": "completed", "docs": len(processed_docs)})
 
+
 def save_to_postgres(doc):
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO documents (url, title, description, text)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (url) DO NOTHING
+        INSERT INTO documents (url, title, description, text, embedding)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (url) DO UPDATE SET
+          title = EXCLUDED.title,
+          description = EXCLUDED.description,
+          text = EXCLUDED.text,
+          embedding = EXCLUDED.embedding
     """, (
-        doc['url'], doc['title'], doc['description'], doc['text']
+        doc['url'], doc['title'], doc['description'], doc['text'], doc['embedding']
     ))
     conn.commit()
     cur.close()
     conn.close()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+@app.route('/search', methods=['POST'])
+def semantic_search():
+    query = request.json.get('query')
+    if not query:
+        return jsonify({"error": "Missing query"}), 400
+
+    embedding = embed_text(query)
+
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT url, title, description, 1 - (embedding <=> %s::vector) AS cosine_similarity
+        FROM documents
+        ORDER BY embedding <-> %s::vector
+        LIMIT 5
+    """, (embedding, embedding))
+    results = cur.fetchall()
+    cur.close()
+
+    return jsonify([{
+        "url": r[0],
+        "title": r[1],
+        "description": r[2],
+        "similarity": 1 - r[3]
+    } for r in results])
