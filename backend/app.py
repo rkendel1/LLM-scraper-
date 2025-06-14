@@ -76,29 +76,9 @@ def save_to_postgres(title, description, text, url, embedding):
     conn.commit()
     cur.close()
     conn.close()
+    
 from processor.change_detector import has_changed
 
-@app.route('/start-crawl', methods=['POST'])
-def start_crawl():
-    data = request.json
-    domain = data.get('domain')
-    depth = data.get('depth', 2)
-
-    docs = run_crawler(domain, depth)
-    updated_docs = []
-
-    for doc in docs:
-        content = extract_content(doc['html'])
-        if not content:
-            continue
-
-        # Skip unchanged pages
-        if not has_changed(doc['url'], content['text'], domain):
-            print(f"Skipped unchanged: {doc['url']}")
-            continue
-
-        embedding = embed_text(content['text'])
-        save_to_postgres(content, doc['url'], embedding)
-        updated_docs.append(doc['url'])
-
-    return jsonify({"status": "completed", "docs_updated": len(updated_docs)})
+@app.route('/pdf/<filename>')
+def serve_pdf(filename):
+    return send_from_directory('pdfs/', filename)
