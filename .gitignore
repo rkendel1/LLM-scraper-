@@ -1,5 +1,30 @@
-integrate/
-integrate/
-integrate/
-integrate/
-integrate/
+
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+poetry.lock
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log*
+yarn.lock
+
+# macOS
+.DS_Store
+
+# Docker
+*.pid
+*.log
+docker-compose.override.yml
+
+# VS Code
+.vscode/

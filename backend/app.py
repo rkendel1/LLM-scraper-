@@ -1,9 +1,13 @@
 # backend/app.py
 
 from flask import Flask, request, jsonify
-import os
 import json
 import logging
+import os
+
+database_url = os.getenv("DATABASE_URL")
+ollama_host = os.getenv("OLLAMA_HOST")
+debug_mode = os.getenv("DEBUG", "False").lower() == "true"
 
 # Initialize Flask app
 app = Flask(__name__)

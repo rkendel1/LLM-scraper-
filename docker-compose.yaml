@@ -1,9 +1,7 @@
-# docker-compose.yml
-
-name: llm-scraper
+version: '3.9'
 
 services:
-  # PostgreSQL 17 with pgvector 0.8.0
+  # 🛢 PostgreSQL 17 with pgvector 0.8.0
   postgres:
     image: pgvector/pgvector:0.8.0-pg17
     environment:
@@ -17,32 +15,38 @@ services:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./db/init_pgvector.sh:/docker-entrypoint-initdb.d/init_pgvector.sh
 
-  # Flask Backend API
+  # 🐍 Flask Backend API (via Poetry)
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: python app.py
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       DATABASE_URL: postgresql://scraper:scraperpass@postgres:5432/scraperdb
+      OLLAMA_HOST: http://host.docker.internal:11434
     depends_on:
       - postgres
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
 
-  # React Frontend (Vite)
+  # ⚛️ React Frontend (Vite)
   frontend:
-    build: ./frontend
+    platform: linux/amd64
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
-      - "8080:8080"
-    depends_on:
-      - backend
+      - "8080:5173"
     command: npm run dev
     working_dir: /app
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

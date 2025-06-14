@@ -1,8 +1,14 @@
-# llm/pdf_form_filler.py
-
+import os
 from langchain_community.llms import Ollama
 
-llm = Ollama(model="mistral")
+# Get host from env var or default to localhost
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+# Initialize Ollama with custom host and model
+llm = Ollama(
+    model="mistral",
+    base_url=OLLAMA_HOST
+)
 
 def generate_with_mistral(prompt):
     return llm.invoke(prompt).strip()

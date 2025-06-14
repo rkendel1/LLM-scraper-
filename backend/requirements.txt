@@ -41,3 +41,5 @@ spacy==3.7.0
 
 # 🧪 Development / Debugging
 mcp-server
+
+python-dotenv==1.0.0
