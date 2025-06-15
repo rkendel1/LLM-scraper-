@@ -1,7 +1,7 @@
 # 🔧 Core Frameworks
-Flask==2.3.2
 fastapi==0.95.0
 uvicorn==0.21.1
+httpx==0.24.0  # Async HTTP client to replace requests
 
 # 🕸️ Crawling & Scraping
 scrapy==2.8.0
@@ -32,7 +32,6 @@ pypdf==3.17.0
 pdfkit==1.0.0
 
 # 🌐 HTTP & Networking
-requests==2.31.0
 Werkzeug==3.0.1
 
 # 🗣️ Language Detection & NLP
@@ -41,5 +40,7 @@ spacy==3.7.0
 
 # 🧪 Development / Debugging
 mcp-server
-
 python-dotenv==1.0.0
+
+# 🧩 Optional (for running Flask routes in FastAPI)
+flask==2.3.2  # Keep Flask installed for routes that might still be imported

@@ -1,30 +1,15 @@
-# backend/app.py
-
-from flask import Flask, request, jsonify, render_template, render_template_string
-import json
-import logging
-import os
-import threading
+from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-
+import os
+import logging
+import threading
+import json
 import psycopg2
 from psycopg2.extras import Json
-
-# Optional: If you're calling embed_text inside functions, you can move this up for clarity
-# from embedder.embedding_utils import embed_text
-
-database_url = os.getenv("DATABASE_URL")
-ollama_host = os.getenv("OLLAMA_HOST")
-debug_mode = os.getenv("DEBUG", "False").lower() == "true"
-
-# Initialize Flask app
-app = Flask(__name__, template_folder='templates', static_folder='static')
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Ensure upload and graph folders exist
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("graphs", exist_ok=True)
 
 # === Import Modules ===
 from crawler.scrapy_spider import run_crawler
@@ -33,16 +18,42 @@ from embedder.embedding_utils import embed_text
 from llm.pdf_form_filler import generate_with_mistral
 from utils.database import save_to_postgres, get_db
 from utils.user_utils import update_user_profile, get_user_profile
-from utils.web_search import simple_web_search #extract_content_from_url
+from utils.web_search import simple_web_search
 from utils.quality_filter import is_quality_result
 from utils.delegation_model import should_delegate_query
 from utils.ontology_router import route_query_to_agent
 from utils.forwarder import forward_to_agent
 
+# Initialize FastAPI app
+app = FastAPI(
+    title="LLM Scraper API",
+    description="Scrape URLs, process PDFs, build ontologies, and use LLMs for RAG.",
+    version="1.0.0"
+)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Set up template engine
+templates = Jinja2Templates(directory="templates")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Environment variables
+database_url = os.getenv("DATABASE_URL")
+ollama_host = os.getenv("OLLAMA_HOST")
+debug_mode = os.getenv("DEBUG", "False").lower() == "true"
+
+# Ensure directories exist
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("graphs", exist_ok=True)
+
 # Global flag to control crawl
 crawl_stop_flag = threading.Event()
 
-# === Helper Functions ===
+# Helper functions (unchanged)
 def has_changed(url, text, domain):
     from processor.change_detector import has_changed as detector
     return detector(url, text, domain)
@@ -71,30 +82,48 @@ def export_graph_json(docs, domain):
     from graph.ontology_builder import export_graph_json
     return export_graph_json(docs, domain)
 
+# Pydantic Models
+class CrawlRequest(BaseModel):
+    domain: str
+    depth: int = 2
+
+class AskQuestionRequest(BaseModel):
+    question: str
+    user_id: Optional[str] = None
+
+class UserProfileRequest(BaseModel):
+    user_id: str
+
+class ProfileUpdateRequest(BaseModel):
+    user_id: str
+    key: str
+    value: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+class VerifyEmailRequest(BaseModel):
+    email: str
+    otp: str
+
+class UploadFilesRequest(BaseModel):
+    files: List[str]
+
 # === Routes ===
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.route('/start-crawl', methods=['POST'])
-def start_crawl():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No JSON payload received"}), 400
-
-    domain = data.get('domain')
-    depth = data.get('depth', 2)
-
-    if not domain:
-        return jsonify({"error": "Missing 'domain' in request"}), 400
-
+@app.post("/start-crawl")
+async def start_crawl(request: CrawlRequest):
     global crawl_stop_flag
     crawl_stop_flag.clear()
-
+    
     def crawl_task():
         try:
-            docs = run_crawler(domain, depth, stop_event=crawl_stop_flag)
+            docs = run_crawler(request.domain, request.depth, stop_event=crawl_stop_flag)
             updated_docs = []
             for doc in docs:
                 if crawl_stop_flag.is_set():
@@ -102,7 +131,7 @@ def start_crawl():
                 content = extract_content(doc['html'])
                 if not content:
                     continue
-                if not has_changed(doc['url'], content['text'], domain):
+                if not has_changed(doc['url'], content['text'], request.domain):
                     continue
                 pdf_paths = []
                 for pdf_url in doc.get('pdf_links', []):
@@ -110,53 +139,70 @@ def start_crawl():
                     if pdf_path:
                         analysis = analyze_pdf_form(pdf_path)
                         if analysis['is_form']:
-                            field_data = {field['name']: generate_field_value(field['name'], field.get('type', '')) for field in analysis['fields'] if generate_field_value(field['name'], field.get('type', ''))}
+                            field_data = {
+                                field['name']: generate_field_value(field['name'], field.get('type', ''))
+                                for field in analysis['fields']
+                                if generate_field_value(field['name'], field.get('type', ''))
+                            }
                             filled_path = pdf_path.replace('.pdf', '_filled.pdf')
                             fill_pdf_form(pdf_path, filled_path, field_data)
                             pdf_paths.append(filled_path)
                         else:
                             pdf_paths.append(pdf_path)
                 embedding = embed_text(content['text'])
-                save_to_postgres(title=content['title'], description=content['description'], text=content['text'], url=doc['url'], embedding=embedding, pdf_paths=pdf_paths, source_type='web', metadata={'domain': domain})
+                save_to_postgres(
+                    title=content['title'],
+                    description=content['description'],
+                    text=content['text'],
+                    url=doc['url'],
+                    embedding=embedding,
+                    pdf_paths=pdf_paths,
+                    source_type='web',
+                    metadata={'domain': request.domain}
+                )
                 updated_docs.append(doc)
             if not crawl_stop_flag.is_set() and updated_docs:
-                build_ontology(updated_docs, domain)
-                export_graph_json(updated_docs, domain)
+                build_ontology(updated_docs, request.domain)
+                export_graph_json(updated_docs, request.domain)
         except Exception as e:
             logger.error(f"Error during crawl: {e}")
 
     crawl_thread = threading.Thread(target=crawl_task)
     crawl_thread.start()
+    return {"status": "started", "domain": request.domain}
 
-    return jsonify({"status": "started", "domain": domain})
-
-@app.route('/stop-crawl', methods=['POST'])
-def stop_crawl():
+@app.post("/stop-crawl")
+async def stop_crawl():
     global crawl_stop_flag
     crawl_stop_flag.set()
-    return jsonify({"status": "stopping"})
+    return {"status": "stopping"}
 
-@app.route('/rag/ask', methods=['POST'])
-def ask_question():
+@app.post("/rag/ask")
+async def ask_question(data: AskQuestionRequest):
     from langchain.prompts import ChatPromptTemplate
     from llm.prompt_templates import RAG_PROMPT_TEMPLATE, PROFILE_EXTRACTION_PROMPT
-    query = request.json.get('question')
-    user_id = request.json.get('user_id')
+    query = data.question
+    user_id = data.user_id
+
     if not query:
-        return jsonify({"error": "Missing question"}), 400
+        raise HTTPException(status_code=400, detail="Missing question")
 
     try:
         from utils.hybrid_search import hybrid_search
         context_docs = hybrid_search(query, limit=3)
+
         if not context_docs:
             if should_delegate_query(query):
                 target_agent = route_query_to_agent(query)
                 if target_agent:
-                    return jsonify(forward_to_agent(target_agent, query))
+                    return forward_to_agent(target_agent, query)
+
             search_urls = simple_web_search(query, max_results=5)
             new_docs = [url for url in search_urls if is_quality_result(url)]
             context_docs = hybrid_search(query, limit=3)
+
         profile = get_user_profile(user_id) if user_id else {}
+
         if user_id:
             profile_prompt = PROFILE_EXTRACTION_PROMPT.format(input=query)
             profile_update_str = generate_with_mistral(profile_prompt)
@@ -165,24 +211,30 @@ def ask_question():
                 for key, value in profile_update.items():
                     update_user_profile(user_id, {"key": key, "value": value})
                 profile.update(profile_update)
-            except:
+            except Exception:
                 pass
-        context = "\n\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
+
+        context = "\n".join([f"{d['title']}\n{d['text'][:500]}" for d in context_docs])
         full_prompt = RAG_PROMPT_TEMPLATE.format(context=context, question=query)
         answer = generate_with_mistral(full_prompt)
+
         validation_prompt = f"""
         You are a quality assurance assistant.
         The user asked: "{query}"
         The system answered: "{answer}"
         Based on the context below, is the answer accurate?
         Context: {context}
-        Please respond with: - Yes/No for accuracy - A corrected or improved version of the answer - Suggested next steps
+        Please respond with: 
+        - Yes/No for accuracy
+        - A corrected or improved version of the answer
+        - Suggested next steps
         """
         validation_response = generate_with_mistral(validation_prompt).strip().split('\n')
         is_accurate = validation_response[0].lower().startswith("yes")
         improved_answer = validation_response[2] if len(validation_response) > 2 else answer
         next_steps = validation_response[3] if len(validation_response) > 3 else "No specific next steps."
-        return jsonify({
+
+        return {
             "original_query": query,
             "initial_answer": answer,
             "is_accurate": is_accurate,
@@ -190,40 +242,42 @@ def ask_question():
             "next_steps": next_steps,
             "sources": [{"title": d["title"], "url": d.get("url")} for d in context_docs],
             "profile_used": profile
-        })
+        }
+
     except Exception as e:
         logger.error(f"Error in /rag/ask: {e}")
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/user/profile', methods=['POST'])
-def get_profile():
-    user_id = request.json.get('user_id')
+@app.post("/user/profile")
+async def get_profile(data: UserProfileRequest):
+    user_id = data.user_id
     if not user_id:
-        return jsonify({"error": "Missing user_id"}), 400
+        raise HTTPException(status_code=400, detail="Missing user_id")
     profile = get_user_profile(user_id)
-    return jsonify({"profile": profile}) if profile else jsonify({"error": "User not found"}), 404
+    if profile:
+        return {"profile": profile}
+    else:
+        raise HTTPException(status_code=404, detail="User not found")
 
-@app.route('/user/profile/update', methods=['POST'])
-def update_profile():
-    data = request.json
-    user_id = data.get('user_id')
-    key = data.get('key')
-    value = data.get('value')
+@app.post("/user/profile/update")
+async def update_profile(data: ProfileUpdateRequest):
+    user_id = data.user_id
+    key = data.key
+    value = data.value
     if not all([user_id, key, value]):
-        return jsonify({"error": "Missing user_id, key, or value"}), 400
+        raise HTTPException(status_code=400, detail="Missing user_id, key, or value")
     try:
         update_user_profile(user_id, {"key": key, "value": value})
-        return jsonify({"status": "success", "message": f"{key} updated", "key": key, "value": value})
+        return {"status": "success", "message": f"{key} updated", "key": key, "value": value}
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/user/profile/delete', methods=['POST'])
-def delete_profile_key():
-    data = request.json
-    user_id = data.get('user_id')
-    key = data.get('key')
+@app.post("/user/profile/delete")
+async def delete_profile_key(data: ProfileUpdateRequest):
+    user_id = data.user_id
+    key = data.key
     if not user_id or not key:
-        return jsonify({"error": "Missing user_id or key"}), 400
+        raise HTTPException(status_code=400, detail="Missing user_id or key")
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -231,52 +285,47 @@ def delete_profile_key():
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({"status": "deleted", "key": key})
+        return {"status": "deleted", "key": key}
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/auth/register', methods=['POST'])
-def register():
-    email = request.json.get('email')
-    password = request.json.get('password')
-    user_id = create_user(email, password)  # Assume this function exists
-    return jsonify({"status": "registered", "user_id": user_id}) if user_id else jsonify({"error": "Email already exists"}), 400
+@app.post("/auth/register")
+async def register(data: RegisterRequest):
+    email = data.email
+    password = data.password
+    # Assume create_user function exists
+    user_id = create_user(email, password)
+    if user_id:
+        return {"status": "registered", "user_id": user_id}
+    else:
+        raise HTTPException(status_code=400, detail="Email already exists")
 
-@app.route('/auth/verify-email', methods=['POST'])
-def verify_email():
-    email = request.json.get('email')
-    otp = request.json.get('otp')
-    return jsonify({"status": "verified", "user_id": 123})  # Simulate success
+@app.post("/auth/verify-email")
+async def verify_email():
+    return {"status": "verified", "user_id": 123}  # Simulate success
 
-@app.route('/auth/request-mail-otp', methods=['POST'])
-def request_mail_otp():
-    user_id = request.json.get('user_id')
-    return jsonify({"status": "sent", "message": "Code mailed to user's address"})
+@app.post("/auth/request-mail-otp")
+async def request_mail_otp(data: UserProfileRequest):
+    return {"status": "sent", "message": "Code mailed to user's address"}
 
-@app.route('/upload', methods=['POST'])
-def upload_files():
-    if 'files' not in request.files:
-        return jsonify({"error": "No files part"}), 400
-    files = request.files.getlist('files')
+@app.post("/upload")
+async def upload_files(files: List[str] = Body(...)):
     uploaded_paths = []
-    for file in files:
-        if file.filename == '':
+    for filename in files:
+        if filename == '':
             continue
-        file_path = os.path.join('uploads', file.filename)
-        file.save(file_path)
+        file_path = os.path.join('uploads', filename)
+        # Simulating file save (replace with actual upload handling)
         uploaded_paths.append(file_path)
-    return jsonify({"status": "uploaded", "files": uploaded_paths})
+    return {"status": "uploaded", "files": uploaded_paths}
 
-@app.route('/graph/<domain>')
-def view_graph(domain):
+@app.get("/graph/{domain}")
+async def view_graph(domain: str):
     graph_file = f"graphs/{domain}.json"
     if os.path.exists(graph_file):
-        with open(graph_file) as f:
+        with open(graph_file, "r") as f:
             graph_data = f.read()
     else:
         graph_data = json.dumps({"nodes": [], "links": []})  # Default empty graph
-    return render_template_string(open("graphs/viewer/index.html").read(), GRAPH_DATA=graph_data)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    return {"GRAPH_DATA": graph_data}

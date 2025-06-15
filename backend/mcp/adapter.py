@@ -1,44 +1,63 @@
-# mcp/adapter.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import httpx
 
-from flask import Flask, request, jsonify
-import requests
+app = FastAPI(
+    title="MCP Adapter API",
+    description="Adapter for MCP model queries and tool calls",
+    version="1.0.0"
+)
 
-app = Flask(__name__)
+class ModelQueryRequest(BaseModel):
+    query: str
 
-@app.route("/model/query", methods=["POST"])
-def model_query():
-    data = request.json
+class ToolCallRequest(BaseModel):
+    tool_name: str
+    parameters: dict = {}
+
+@app.post("/model/query")
+async def model_query(request: ModelQueryRequest):
     tool_name = "rag.ask"
-    response = requests.post(
-        "http://localhost:5000/rag/ask",
-        json={"question": data.get("query")},
-        timeout=10
-    )
-    return jsonify(response.json())
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "http://localhost:5000/rag/ask",
+            json={"question": request.query},
+            timeout=10
+        )
+    
+    return response.json()
 
-@app.route("/tool/callTool", methods=["POST"])
-def call_tool():
-    data = request.json
-    tool_name = data.get("tool_name")
-    params = data.get("parameters", {})
+@app.post("/tool/callTool")
+async def call_tool(request: ToolCallRequest):
+    tool_name = request.tool_name
+    params = request.parameters
     
     if tool_name == "external.delegate":
         target_url = params.get("url")
         question = params.get("question")
-        response = requests.post(
-            f"{target_url}/model/query",
-            json={"model_name": "mistral-local", "query": question},
-            timeout=10
-        )
-        return jsonify(response.json())
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{target_url}/model/query",
+                json={"model_name": "mistral-local", "query": question},
+                timeout=10
+            )
+        
+        return response.json()
     
     elif tool_name == "query.hybrid":
-        response = requests.post(
-            "http://localhost:5000/query",
-            json={"query": params.get("query")},
-            timeout=10
-        )
-        return jsonify(response.json())
-
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:5000/query",
+                json={"query": params.get("query")},
+                timeout=10
+            )
+        
+        return response.json()
     else:
-        return jsonify({"error": "Unsupported tool"}), 400
+        raise HTTPException(status_code=400, detail={"error": "Unsupported tool"})
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
