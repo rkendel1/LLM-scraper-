@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
@@ -28,23 +31,29 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# === Configure Logging ===
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Set up template engine
+templates = Jinja2Templates(directory="templates")
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# === Environment Variables ===
+# Environment variables
 database_url = os.getenv("DATABASE_URL")
 ollama_host = os.getenv("OLLAMA_HOST")
 debug_mode = os.getenv("DEBUG", "False").lower() == "true"
 
-# Ensure upload and graph folders exist
+# Ensure directories exist
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("graphs", exist_ok=True)
 
 # Global flag to control crawl
 crawl_stop_flag = threading.Event()
 
-# === Helper Functions (unchanged) ===
+# Helper functions (unchanged)
 def has_changed(url, text, domain):
     from processor.change_detector import has_changed as detector
     return detector(url, text, domain)
@@ -73,7 +82,7 @@ def export_graph_json(docs, domain):
     from graph.ontology_builder import export_graph_json
     return export_graph_json(docs, domain)
 
-# === Pydantic Models for Validation ===
+# Pydantic Models
 class CrawlRequest(BaseModel):
     domain: str
     depth: int = 2
@@ -102,9 +111,10 @@ class UploadFilesRequest(BaseModel):
     files: List[str]
 
 # === Routes ===
-@app.get("/")
-async def home():
-    return {"message": "Welcome to LLM Scraper API", "docs": "/docs"}
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/start-crawl")
 async def start_crawl(request: CrawlRequest):
@@ -171,7 +181,6 @@ async def stop_crawl():
 async def ask_question(data: AskQuestionRequest):
     from langchain.prompts import ChatPromptTemplate
     from llm.prompt_templates import RAG_PROMPT_TEMPLATE, PROFILE_EXTRACTION_PROMPT
-    
     query = data.question
     user_id = data.user_id
 
@@ -293,7 +302,7 @@ async def register(data: RegisterRequest):
         raise HTTPException(status_code=400, detail="Email already exists")
 
 @app.post("/auth/verify-email")
-async def verify_email(data: VerifyEmailRequest):
+async def verify_email():
     return {"status": "verified", "user_id": 123}  # Simulate success
 
 @app.post("/auth/request-mail-otp")
