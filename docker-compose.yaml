@@ -28,7 +28,7 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./backend:/app
+      - ./backend:/app/static
       - uploads:/app/uploads
 
 volumes:

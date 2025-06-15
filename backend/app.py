@@ -180,7 +180,7 @@ async def stop_crawl():
 @app.post("/rag/ask")
 async def ask_question(data: AskQuestionRequest):
     from langchain.prompts import ChatPromptTemplate
-    from llm.prompt_templates import RAG_PROMPT_TEMPLATE, PROFILE_EXTRACTION_PROMPT
+    from llm.prompt_templates import RAG_PROMPT_TEMPLATE, QA_WITH_PROFILE_PROMPT
     query = data.question
     user_id = data.user_id
 
@@ -204,7 +204,7 @@ async def ask_question(data: AskQuestionRequest):
         profile = get_user_profile(user_id) if user_id else {}
 
         if user_id:
-            profile_prompt = PROFILE_EXTRACTION_PROMPT.format(input=query)
+            profile_prompt = QA_WITH_PROFILE_PROMPT.format(input=query)
             profile_update_str = generate_with_mistral(profile_prompt)
             try:
                 profile_update = json.loads(profile_update_str)

@@ -3,7 +3,7 @@ from pypdf import PdfReader
 def analyze_pdf_form(pdf_path):
     try:
         reader = PdfReader(pdf_path)
-        if '/AcroForm' in reader.trailer['/Root']:
+        if '/AcroForm' in reader.trailer['/Root'].keys():
             fields = reader.trailer['/Root']['/AcroForm']['/Fields']
             field_info = []
             for field in fields:
